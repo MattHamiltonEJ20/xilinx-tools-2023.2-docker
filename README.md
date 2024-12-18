@@ -1,3 +1,23 @@
+# Fork Info
+
+Forked from the origin repository [esnet/xilinx-tools-docker](https://github.com/esnet/xilinx-tools-docker.git), and inspired from [Reddit Blog](https://www.reddit.com/r/FPGA/comments/bk8b3n/dockerizing_xilinx_tools/)
+
+In this fork, we changed the setup pipeline:
+
++ Download the Xilinx Vivado installer from [https://www.xilinx.com/support/download/index.html/content/xilinx/en/downloadNav/vivado-design-tools.html](https://www.xilinx.com/support/download/index.html/content/xilinx/en/downloadNav/vivado-design-tools.html), Download the SFD file.
+
++ extract the TAR/GZIP file, copy the folder to the `vivado-installer` directory, change name as `Xilinx_Unified`.
+
++ run `./vivado-installer/Xilinx_Unified/xsetup -b ConfigGen`, select the product and confirm. The generated config file will be available at `~/.Xilinx/install_config.txt`.
+
++ copy the generated file to the `vivado-installer`.
+
++ build the docker 
+
+# Now the Fork Has Verified the Xilinx Vivado Installation v2021.2 v2021.2
+
+# Origin Repository README
+
 # Copyright Notice
 
 ESnet SmartNIC Copyright (c) 2022, The Regents of the University of
