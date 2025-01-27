@@ -1,117 +1,120 @@
-# https://www.reddit.com/r/FPGA/comments/bk8b3n/dockerizing_xilinx_tools/
-
-FROM  ubuntu:focal
+FROM ubuntu:noble-20240429
 ENV DEBIAN_FRONTEND=noninteractive
 
-# Configure local ubuntu mirror as package source
+# Configure local Ubuntu mirror as package source
 RUN \
-  sed -i s@/archive.ubuntu.com/@/mirrors.aliyun.com/@g /etc/apt/sources.list && sed -i s@/security.ubuntu.com/@/mirrors.aliyun.com/@g /etc/apt/sources.list
+  sed -i -re 's|http://archive.ubuntu.com/ubuntu|http://mirror.aarnet.edu.au/pub/ubuntu|g' /etc/apt/sources.list
 
-ENV XLNX_INSTALL_LOCATION=/opt/Xilinx
+# Install base system utilities
+RUN \
+  ln -fs /usr/share/zoneinfo/UTC /etc/localtime && \
+  apt-get update -y && \
+  apt-get upgrade -y && \
+  apt-get install -y --no-install-recommends \
+    ca-certificates \
+    libncurses6 \
+    locales \
+    lsb-release \
+    net-tools \
+    patch \
+    pigz \
+    unzip \
+    wget && \
+  apt-get autoclean && \
+  apt-get autoremove && \
+  locale-gen en_US.UTF-8 && \
+  update-locale LANG=en_US.UTF-8 && \
+  rm -rf /var/lib/apt/lists/*
 
-ENV DEBIAN_FRONTEND=noninteractive
+# Install additional utilities
+RUN \
+  apt-get update -y && \
+  apt-get install -y --no-install-recommends \
+    build-essential \
+    git \
+    python3-pip \
+    python3-yaml \
+    vim-tiny \
+    yq && \
+  pip3 install --break-system-packages pyyaml && \
+  apt-get autoclean && \
+  rm -rf /var/lib/apt/lists/*
 
-# Set BASH as the default shell
-RUN echo "dash dash/sh boolean false" | debconf-set-selections 
-RUN DEBIAN_FRONTEND=$DEBIAN_FRONTEND dpkg-reconfigure dash
+# Install Ubuntu desktop and XRDP there is prbably a better way to do the user name and password here
+RUN \
+  apt update && DEBIAN_FRONTEND=noninteractive apt install -y lubuntu-desktop xrdp && \
+  useradd -m matt -p $(openssl passwd password) && usermod -aG sudo matt && \
+  adduser xrdp ssl-cert && \
+  sed -i '3 a echo "\
+  export GNOME_SHELL_SESSION_MODE=Lubuntu\\n\
+  export XDG_SESSION_TYPE=x11\\n\
+  export XDG_CURRENT_DESKTOP=Lubuntu:GNOME\\n\
+  export XDG_CONFIG_DIRS=/etc/xdg/xdg-Lubuntu:/etc/xdg\\n\
+  " > ~/.xsessionrc' /etc/xrdp/startwm.sh
 
-RUN apt-get update
-RUN dpkg --add-architecture i386 
-RUN apt-get update 
-# petalinux base dependencies
-RUN apt-get install -y \
-  tofrodos \
-  iproute2 \
-  gawk \
-  xvfb \
-  git \
-  make \
-  net-tools \
-  libncurses5-dev \
-  update-inetd \
-  tftpd \
-  zlib1g-dev:i386 \
-  libssl-dev \
-  flex \
-  bison \
-  libselinux1 \
-  gnupg \
-  wget \
-  diffstat \
-  chrpath \
-  socat \
-  xterm \
-  autoconf \
-  libtool \
-  libtool-bin \
-  tar \
-  unzip \
-  texinfo \
-  zlib1g-dev \
-  gcc-multilib \
-  build-essential \
-  libsdl1.2-dev \
-  libglib2.0-dev \
-  screen \
-  pax \
-  gzip \
-  python3-gi \
-  less \
-  lsb-release \
-  fakeroot \
-  libgtk2.0-0 \
-  libgtk2.0-dev \
-  cpio \
-  rsync \
-  xorg \
-  expect \
-  dos2unix
+# # Install compatibility libraries for Vivado
+# RUN \
+#   if [ "$(lsb_release --short --release)" = "22.04" ]; then \
+#     wget -q -P /tmp http://linux.mirrors.es.net/ubuntu/pool/main/o/openssl/libssl1.1_1.1.1f-1ubuntu2.23_amd64.deb && \
+#     dpkg-deb --fsys-tarfile /tmp/libssl1.*.deb | \
+#       tar -C /tools/Xilinx/Vivado/${VIVADO_VERSION}/lib/lnx64.o/Ubuntu/22 --strip-components=4 -xavf - ./usr/lib/x86_64-linux-gnu/ && \
+#     rm /tmp/libssl1.*.deb ; \
+#   fi
 
-RUN apt-get install -y \
-  google-perftools \
-  default-jre
+# Set up Vivado version and installer details
+ENV VIVADO_VERSION=2023.2
+ARG VIVADO_INSTALLER="FPGAs_AdaptiveSoCs_Unified_${VIVADO_VERSION}_1013_2256.tar.gz"
+ARG VIVADO_UPDATE="Vivado_Vitis_Update_2023.2.2_0209_0950.tar.gz"
+ARG VIVADO_INSTALLER_CONFIG="/vivado-installer/install_config_vivado.${VIVADO_VERSION}.txt"
 
-
+# Copy Vivado installer files and install Vivado
 COPY vivado-installer/ /vivado-installer/
+RUN \
+  mkdir -p /vivado-installer/install && \
+  if [ -e /vivado-installer/$VIVADO_INSTALLER ]; then \
+    pigz -dc /vivado-installer/$VIVADO_INSTALLER | tar xa --strip-components=1 -C /vivado-installer/install ; \
+  else \
+    echo "Error: Vivado installer file $VIVADO_INSTALLER not found in /vivado-installer." >&2 && exit 1 ; \
+  fi && \
+  if [ ! -e ${VIVADO_INSTALLER_CONFIG} ]; then \
+    /vivado-installer/install/xsetup \
+      -p 'Vivado' \
+      -e 'Vivado ML Enterprise' \
+      -b ConfigGen && \
+    echo "No installer configuration file was provided. Generating a default one for you to modify." && \
+    echo "-------------" && \
+    cat /root/.Xilinx/install_config.txt && \
+    echo "-------------" && \
+    exit 1 ; \
+  fi ; \
+  /vivado-installer/install/xsetup \
+    --agree 3rdPartyEULA,XilinxEULA \
+    --batch Install \
+    --config ${VIVADO_INSTALLER_CONFIG} && \
+  rm -r /vivado-installer/install
 
-# ENV XLNX_VIVADO_OFFLINE_INSTALLER=<YOUR_VIVADO_INSTALLER>.tar.gz
-# ENV XLNX_VIVADO_BATCH_CONFIG_FILE=<YOUR_VIVADO_CONFIG>.config
-# COPY $XLNX_VIVADO_OFFLINE_INSTALLER $XLNX_INSTALL_LOCATION/tmp/$XLNX_VIVADO_OFFLINE_INSTALLER
-# COPY $XLNX_VIVADO_BATCH_CONFIG_FILE $XLNX_INSTALL_LOCATION/tmp/$XLNX_VIVADO_BATCH_CONFIG_FILE
+# Handle optional Vivado update if provided
+RUN \
+  if [ -n "$VIVADO_UPDATE" ]; then \
+    mkdir -p /vivado-installer/update && \
+    if [ -e /vivado-installer/$VIVADO_UPDATE ]; then \
+      pigz -dc /vivado-installer/$VIVADO_UPDATE | tar xa --strip-components=1 -C /vivado-installer/update ; \
+    else \
+      echo "Error: Vivado update file $VIVADO_UPDATE not found in /vivado-installer." >&2 && exit 1 ; \
+    fi && \
+    /vivado-installer/update/xsetup \
+      --agree 3rdPartyEULA,XilinxEULA \
+      --batch Update \
+      --config ${VIVADO_INSTALLER_CONFIG} && \
+    rm -r /vivado-installer/update ; \
+  fi && \
+  rm -rf /vivado-installer
 
-RUN cd /vivado-installer \
-  && cat install_config.txt \
-  && echo "cd $XLNX_INSTALL_LOCATION" >> $HOME_DIR/.bashrc \
-  && echo "export LANG=en_US.UTF-8" >> $HOME_DIR/.bashrc \
-  && export "LANG=en_US.UTF-8" 
+# Expose RDP port and set entry point
+EXPOSE 3389
 
-WORKDIR /vivado-installer 
-RUN mv install_config.txt Xilinx_Unified/ 
-WORKDIR /vivado-installer/Xilinx_Unified 
-# Setup installer permissions \
-RUN chmod a+x xsetup 
-# Run Setup in batch mode to install Vivado \
-RUN cd /vivado-installer/Xilinx_Unified 
-RUN ./xsetup \
-  --agree XilinxEULA,3rdPartyEULA \
-  --config install_config.txt \
-  --batch INSTALL 
-# Cleanup Temporary Files \
-RUN cd $HOME_DIR 
-RUN rm -rf /vivado-installer
+# Set up the container to pre-source the Vivado environment
+COPY ./entrypoint.sh /entrypoint.sh
+ENTRYPOINT [ "/entrypoint.sh" ]
 
-RUN  echo ". /tools/Xilinx/Vivado/2021.2/settings64.sh" >> $HOME_DIR/.bashrc \
-  && echo "export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/tools/Xilinx/Vivado/2021.2/lib/lnx64.o/" >> $HOME_DIR/.bashrc
-
-# Cleanup temporary install files 
-
-# Cleanup apt cache and temporary files to reduce image size
-RUN apt-get clean
-
-RUN apt-get install locales libtinfo5
-
-RUN locale-gen en_US.UTF-8 
-RUN update-locale LANG=en_US.UTF-8
-
-RUN source /tools/Xilinx/Vivado/2021.2/settings64.sh
-RUN export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/tools/Xilinx/Vivado/2021.2/lib/lnx64.o/
+CMD service dbus start; /usr/lib/systemd/systemd-logind & service xrdp start ; bash;
