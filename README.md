@@ -1,6 +1,13 @@
 # Fork Info
 
-Forked from the origin repository [esnet/xilinx-tools-docker](https://github.com/esnet/xilinx-tools-docker.git), and inspired from [Reddit Blog](https://www.reddit.com/r/FPGA/comments/bk8b3n/dockerizing_xilinx_tools/)
+Forked from the fork [DGGua/xilinx-tools-docker the origin](https://github.com/DGGua/xilinx-tools-docker) of the repository [esnet/xilinx-tools-docker](https://github.com/esnet/xilinx-tools-docker.git) as part of my search for a good way to use the Xlinix tools on a an Intel Mac. The fork is a work in progress. The docker image takes a long time to build and also consumes aproximatly 2010 Gb. XRDP probably needs some tweaking as well.
+
+Todo:
+- Add missing boards to Vivado this is a tweak to the installer config file
+- Add Vitus
+- Petalinux
+- DocNav
+- SSH to allow Visual Studio Code to open git repositories in the docker file to work on them. 
 
 In this fork, we changed the setup pipeline:
 
