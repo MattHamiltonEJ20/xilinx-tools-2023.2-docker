@@ -21,8 +21,6 @@ In this fork, we changed the setup pipeline:
 
 + build the docker 
 
-# Now the Fork Has Verified the Xilinx Vivado Installation v2021.2 v2021.2
-
 # Origin Repository README
 
 # Copyright Notice
